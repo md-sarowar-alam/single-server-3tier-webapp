@@ -23,7 +23,7 @@ Complete PostgreSQL administration guide for BMI Health Tracker including backup
 ### 1.1 Current Database Configuration
 
 **Database Details:**
-- **Database Name:** `bmi_tracker`
+- **Database Name:** `bmidb`
 - **User:** `bmi_user`
 - **PostgreSQL Version:** 12+
 - **Server:** AWS EC2 Ubuntu 22.04 LTS
@@ -56,13 +56,13 @@ CREATE INDEX idx_measurement_date ON measurements(measurement_date);
 
 ```bash
 # Check database size
-sudo -u postgres psql -c "SELECT pg_size_pretty(pg_database_size('bmi_tracker'));"
+sudo -u postgres psql -c "SELECT pg_size_pretty(pg_database_size('bmidb'));"
 
 # Check table size
-sudo -u postgres psql -d bmi_tracker -c "SELECT pg_size_pretty(pg_total_relation_size('measurements'));"
+sudo -u postgres psql -d bmidb -c "SELECT pg_size_pretty(pg_total_relation_size('measurements'));"
 
 # Check row count
-sudo -u postgres psql -d bmi_tracker -c "SELECT COUNT(*) FROM measurements;"
+sudo -u postgres psql -d bmidb -c "SELECT COUNT(*) FROM measurements;"
 ```
 
 ---
@@ -83,13 +83,13 @@ sudo -u postgres psql -d bmi_tracker -c "SELECT COUNT(*) FROM measurements;"
 
 ```bash
 # Basic backup
-sudo -u postgres pg_dump bmi_tracker > /backup/bmi_tracker_$(date +%Y%m%d).sql
+sudo -u postgres pg_dump bmidb > /backup/bmidb_$(date +%Y%m%d).sql
 
 # Compressed backup (recommended)
-sudo -u postgres pg_dump bmi_tracker | gzip > /backup/bmi_tracker_$(date +%Y%m%d).sql.gz
+sudo -u postgres pg_dump bmidb | gzip > /backup/bmidb_$(date +%Y%m%d).sql.gz
 
 # Custom format (faster restore, parallel)
-sudo -u postgres pg_dump -Fc bmi_tracker > /backup/bmi_tracker_$(date +%Y%m%d).dump
+sudo -u postgres pg_dump -Fc bmidb > /backup/bmidb_$(date +%Y%m%d).dump
 ```
 
 #### Backup with Connection Details
@@ -97,7 +97,7 @@ sudo -u postgres pg_dump -Fc bmi_tracker > /backup/bmi_tracker_$(date +%Y%m%d).d
 ```bash
 # If using password authentication
 export PGPASSWORD='your_password'
-pg_dump -h localhost -U bmi_user -d bmi_tracker | gzip > /backup/bmi_tracker_$(date +%Y%m%d).sql.gz
+pg_dump -h localhost -U bmi_user -d bmidb | gzip > /backup/bmidb_$(date +%Y%m%d).sql.gz
 unset PGPASSWORD
 ```
 
@@ -105,21 +105,21 @@ unset PGPASSWORD
 
 ```bash
 # Backup structure without data
-sudo -u postgres pg_dump --schema-only bmi_tracker > /backup/schema_$(date +%Y%m%d).sql
+sudo -u postgres pg_dump --schema-only bmidb > /backup/schema_$(date +%Y%m%d).sql
 ```
 
 #### Data-Only Backup
 
 ```bash
 # Backup data without structure
-sudo -u postgres pg_dump --data-only bmi_tracker > /backup/data_$(date +%Y%m%d).sql
+sudo -u postgres pg_dump --data-only bmidb > /backup/data_$(date +%Y%m%d).sql
 ```
 
 #### Specific Table Backup
 
 ```bash
 # Backup only measurements table
-sudo -u postgres pg_dump -t measurements bmi_tracker | gzip > /backup/measurements_$(date +%Y%m%d).sql.gz
+sudo -u postgres pg_dump -t measurements bmidb | gzip > /backup/measurements_$(date +%Y%m%d).sql.gz
 ```
 
 ### 2.2 Physical Backup (pg_basebackup)
@@ -190,7 +190,7 @@ Create comprehensive backup script: `/usr/local/bin/backup_bmi_db.sh`
 set -e  # Exit on error
 
 # Configuration
-DB_NAME="bmi_tracker"
+DB_NAME="bmidb"
 DB_USER="bmi_user"
 BACKUP_DIR="/var/backups/postgresql"
 DAILY_DIR="$BACKUP_DIR/daily"
@@ -309,14 +309,14 @@ main() {
     fi
     
     # Daily backup (always)
-    DAILY_BACKUP="$DAILY_DIR/bmi_tracker_daily_$DATE.dump"
+    DAILY_BACKUP="$DAILY_DIR/bmidb_daily_$DATE.dump"
     if create_backup "$DAILY_BACKUP" "daily"; then
         upload_to_s3 "$DAILY_BACKUP"
         cleanup_old_backups "$DAILY_DIR" "$RETENTION_DAILY"
         
         # Weekly backup (every Sunday)
         if [ "$DAY_OF_WEEK" -eq 7 ]; then
-            WEEKLY_BACKUP="$WEEKLY_DIR/bmi_tracker_weekly_$DATE.dump"
+            WEEKLY_BACKUP="$WEEKLY_DIR/bmidb_weekly_$DATE.dump"
             cp "$DAILY_BACKUP" "$WEEKLY_BACKUP"
             cp "$DAILY_BACKUP.sha256" "$WEEKLY_BACKUP.sha256"
             log_message "Weekly backup created"
@@ -325,7 +325,7 @@ main() {
         
         # Monthly backup (first day of month)
         if [ "$DAY_OF_MONTH" -eq "01" ]; then
-            MONTHLY_BACKUP="$MONTHLY_DIR/bmi_tracker_monthly_$DATE.dump"
+            MONTHLY_BACKUP="$MONTHLY_DIR/bmidb_monthly_$DATE.dump"
             cp "$DAILY_BACKUP" "$MONTHLY_BACKUP"
             cp "$DAILY_BACKUP.sha256" "$MONTHLY_BACKUP.sha256"
             log_message "Monthly backup created"
@@ -440,17 +440,17 @@ fi
 pm2 stop bmi-backend
 
 # Option 1: Drop and recreate database (DESTRUCTIVE)
-sudo -u postgres psql -c "DROP DATABASE IF EXISTS bmi_tracker;"
-sudo -u postgres psql -c "CREATE DATABASE bmi_tracker OWNER bmi_user;"
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS bmidb;"
+sudo -u postgres psql -c "CREATE DATABASE bmidb OWNER bmi_user;"
 
 # Restore from plain SQL backup
-gunzip < /var/backups/postgresql/daily/bmi_tracker_20251216.sql.gz | sudo -u postgres psql bmi_tracker
+gunzip < /var/backups/postgresql/daily/bmidb_20251216.sql.gz | sudo -u postgres psql bmidb
 
 # Option 2: Restore to existing database (appends data)
-gunzip < /var/backups/postgresql/daily/bmi_tracker_20251216.sql.gz | sudo -u postgres psql bmi_tracker
+gunzip < /var/backups/postgresql/daily/bmidb_20251216.sql.gz | sudo -u postgres psql bmidb
 
 # Verify restoration
-sudo -u postgres psql -d bmi_tracker -c "SELECT COUNT(*) FROM measurements;"
+sudo -u postgres psql -d bmidb -c "SELECT COUNT(*) FROM measurements;"
 
 # Restart application
 pm2 restart bmi-backend
@@ -463,11 +463,11 @@ pm2 restart bmi-backend
 pm2 stop bmi-backend
 
 # Drop and recreate database
-sudo -u postgres psql -c "DROP DATABASE IF EXISTS bmi_tracker;"
-sudo -u postgres psql -c "CREATE DATABASE bmi_tracker OWNER bmi_user;"
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS bmidb;"
+sudo -u postgres psql -c "CREATE DATABASE bmidb OWNER bmi_user;"
 
 # Restore using pg_restore (supports parallel jobs)
-sudo -u postgres pg_restore -d bmi_tracker -j 4 /var/backups/postgresql/daily/bmi_tracker_20251216.dump
+sudo -u postgres pg_restore -d bmidb -j 4 /var/backups/postgresql/daily/bmidb_20251216.dump
 
 # Options:
 # -j 4: Use 4 parallel jobs (faster)
@@ -483,7 +483,7 @@ pm2 restart bmi-backend
 
 ```bash
 # Restore only measurements table
-sudo -u postgres pg_restore -d bmi_tracker -t measurements /backup/bmi_tracker_20251216.dump
+sudo -u postgres pg_restore -d bmidb -t measurements /backup/bmidb_20251216.dump
 ```
 
 ### 4.3 Restore to Different Database Name
@@ -492,13 +492,13 @@ sudo -u postgres pg_restore -d bmi_tracker -t measurements /backup/bmi_tracker_2
 # Useful for testing or migration
 
 # Create new database
-sudo -u postgres psql -c "CREATE DATABASE bmi_tracker_test OWNER bmi_user;"
+sudo -u postgres psql -c "CREATE DATABASE bmidb_test OWNER bmi_user;"
 
 # Restore to test database
-sudo -u postgres pg_restore -d bmi_tracker_test /backup/bmi_tracker_20251216.dump
+sudo -u postgres pg_restore -d bmidb_test /backup/bmidb_20251216.dump
 
 # Compare data
-sudo -u postgres psql -d bmi_tracker_test -c "SELECT COUNT(*) FROM measurements;"
+sudo -u postgres psql -d bmidb_test -c "SELECT COUNT(*) FROM measurements;"
 ```
 
 ### 4.4 Point-in-Time Recovery (PITR)
@@ -552,7 +552,7 @@ sudo systemctl start postgresql
 
 ```bash
 # Connect to database
-sudo -u postgres psql -d bmi_tracker
+sudo -u postgres psql -d bmidb
 
 -- Check table structure
 \dt
@@ -567,7 +567,7 @@ SELECT * FROM measurements ORDER BY created_at DESC LIMIT 10;
 SELECT * FROM pg_indexes WHERE tablename = 'measurements';
 
 -- Check database size
-SELECT pg_size_pretty(pg_database_size('bmi_tracker'));
+SELECT pg_size_pretty(pg_database_size('bmidb'));
 
 -- Exit
 \q
@@ -584,7 +584,7 @@ Create quick restore script: `/usr/local/bin/restore_bmi_db.sh`
 
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <backup_file>"
-    echo "Example: $0 /var/backups/postgresql/daily/bmi_tracker_20251216.dump"
+    echo "Example: $0 /var/backups/postgresql/daily/bmidb_20251216.dump"
     exit 1
 fi
 
@@ -610,23 +610,23 @@ pm2 stop bmi-backend
 
 # Create safety backup
 echo "Creating safety backup of current database..."
-sudo -u postgres pg_dump -Fc bmi_tracker > /tmp/bmi_tracker_safety_$(date +%Y%m%d_%H%M%S).dump
+sudo -u postgres pg_dump -Fc bmidb > /tmp/bmidb_safety_$(date +%Y%m%d_%H%M%S).dump
 
 # Drop and recreate database
 echo "Dropping existing database..."
-sudo -u postgres psql -c "DROP DATABASE IF EXISTS bmi_tracker;"
-sudo -u postgres psql -c "CREATE DATABASE bmi_tracker OWNER bmi_user;"
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS bmidb;"
+sudo -u postgres psql -c "CREATE DATABASE bmidb OWNER bmi_user;"
 
 # Restore
 echo "Restoring database..."
-sudo -u postgres pg_restore -d bmi_tracker -j 4 "$BACKUP_FILE"
+sudo -u postgres pg_restore -d bmidb -j 4 "$BACKUP_FILE"
 
 if [ $? -eq 0 ]; then
     echo "[OK] Database restored successfully"
     
     # Verify
     echo "Verifying data..."
-    sudo -u postgres psql -d bmi_tracker -c "SELECT COUNT(*) FROM measurements;"
+    sudo -u postgres psql -d bmidb -c "SELECT COUNT(*) FROM measurements;"
     
     # Restart application
     echo "Restarting application..."
@@ -812,7 +812,7 @@ ssh -L 5432:localhost:5432 ubuntu@YOUR_EC2_PUBLIC_IP
 # Connect using local pgAdmin or any PostgreSQL client:
 # Host: localhost
 # Port: 5432
-# Database: bmi_tracker
+# Database: bmidb
 # User: bmi_user
 ```
 
@@ -826,7 +826,7 @@ ssh -L 5432:localhost:5432 ubuntu@YOUR_EC2_PUBLIC_IP
 4. Add server connection:
    - Host: `localhost`
    - Port: `5432`
-   - Database: `bmi_tracker`
+   - Database: `bmidb`
 
 **Advantages:**
 - No web server required
@@ -1211,7 +1211,7 @@ sudo apt install pgbouncer -y
 sudo nano /etc/pgbouncer/pgbouncer.ini
 
 [databases]
-bmi_tracker = host=127.0.0.1 port=5432 dbname=bmi_tracker
+bmidb = host=127.0.0.1 port=5432 dbname=bmidb
 
 [pgbouncer]
 listen_addr = 127.0.0.1
@@ -1261,7 +1261,7 @@ sudo systemctl start pgbouncer
 sudo systemctl status pgbouncer
 
 # Test connection
-psql -h localhost -p 6432 -U bmi_user -d bmi_tracker
+psql -h localhost -p 6432 -U bmi_user -d bmidb
 ```
 
 ### 6.5 Load Balancing with HAProxy
@@ -1335,7 +1335,7 @@ sudo -u postgres psql -c "SELECT * FROM pg_stat_replication;"
 
 ```bash
 # Enable extension
-sudo -u postgres psql -d bmi_tracker
+sudo -u postgres psql -d bmidb
 
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 
@@ -1390,9 +1390,9 @@ sudo nano /usr/local/bin/monitor_db_size.sh
 #!/bin/bash
 
 echo "=== Database Size Report ==="
-sudo -u postgres psql -d bmi_tracker -c "
+sudo -u postgres psql -d bmidb -c "
 SELECT 
-    pg_size_pretty(pg_database_size('bmi_tracker')) AS database_size,
+    pg_size_pretty(pg_database_size('bmidb')) AS database_size,
     pg_size_pretty(pg_total_relation_size('measurements')) AS table_size,
     (SELECT COUNT(*) FROM measurements) AS row_count;
 "
@@ -1423,13 +1423,13 @@ autovacuum_analyze_threshold = 50
 
 ```bash
 # Vacuum single table
-sudo -u postgres psql -d bmi_tracker -c "VACUUM ANALYZE measurements;"
+sudo -u postgres psql -d bmidb -c "VACUUM ANALYZE measurements;"
 
 # Vacuum entire database
-sudo -u postgres psql -d bmi_tracker -c "VACUUM ANALYZE;"
+sudo -u postgres psql -d bmidb -c "VACUUM ANALYZE;"
 
 # Full vacuum (locks table, reclaims more space)
-sudo -u postgres psql -d bmi_tracker -c "VACUUM FULL measurements;"
+sudo -u postgres psql -d bmidb -c "VACUUM FULL measurements;"
 ```
 
 **Scheduled Vacuum (Cron):**
@@ -1439,7 +1439,7 @@ sudo -u postgres psql -d bmi_tracker -c "VACUUM FULL measurements;"
 sudo crontab -e -u postgres
 
 # Weekly full vacuum (Sunday 4 AM)
-0 4 * * 0 psql -d bmi_tracker -c "VACUUM ANALYZE;" >> /var/log/postgresql/vacuum.log 2>&1
+0 4 * * 0 psql -d bmidb -c "VACUUM ANALYZE;" >> /var/log/postgresql/vacuum.log 2>&1
 ```
 
 ### 7.4 Index Maintenance
@@ -1469,7 +1469,7 @@ AND schemaname = 'public';
 
 -- Reindex (if needed)
 REINDEX TABLE measurements;
-REINDEX DATABASE bmi_tracker;
+REINDEX DATABASE bmidb;
 ```
 
 ### 7.5 Connection Monitoring
@@ -1485,12 +1485,12 @@ SELECT
     query_start,
     substring(query, 1, 50) as query
 FROM pg_stat_activity
-WHERE datname = 'bmi_tracker';
+WHERE datname = 'bmidb';
 
 -- Kill idle connections
 SELECT pg_terminate_backend(pid) 
 FROM pg_stat_activity 
-WHERE datname = 'bmi_tracker' 
+WHERE datname = 'bmidb' 
 AND state = 'idle' 
 AND state_change < current_timestamp - INTERVAL '1 hour';
 ```
@@ -1535,7 +1535,7 @@ else
 fi
 
 # Connection test
-if sudo -u postgres psql -d bmi_tracker -c "SELECT 1;" > /dev/null 2>&1; then
+if sudo -u postgres psql -d bmidb -c "SELECT 1;" > /dev/null 2>&1; then
     echo "[OK] Database connection successful"
 else
     echo "[FAIL] Cannot connect to database"
@@ -1545,17 +1545,17 @@ fi
 # Database size
 echo ""
 echo "Database Size:"
-sudo -u postgres psql -d bmi_tracker -At -c "SELECT pg_size_pretty(pg_database_size('bmi_tracker'));"
+sudo -u postgres psql -d bmidb -At -c "SELECT pg_size_pretty(pg_database_size('bmidb'));"
 
 # Row count
 echo ""
 echo "Measurement Records:"
-sudo -u postgres psql -d bmi_tracker -At -c "SELECT COUNT(*) FROM measurements;"
+sudo -u postgres psql -d bmidb -At -c "SELECT COUNT(*) FROM measurements;"
 
 # Active connections
 echo ""
 echo "Active Connections:"
-sudo -u postgres psql -At -c "SELECT COUNT(*) FROM pg_stat_activity WHERE datname = 'bmi_tracker';"
+sudo -u postgres psql -At -c "SELECT COUNT(*) FROM pg_stat_activity WHERE datname = 'bmidb';"
 
 # Last backup
 echo ""
@@ -1664,7 +1664,7 @@ pgaudit.log_catalog = off
 sudo systemctl restart postgresql
 
 # Enable in database
-sudo -u postgres psql -d bmi_tracker
+sudo -u postgres psql -d bmidb
 
 CREATE EXTENSION pgaudit;
 
@@ -1681,10 +1681,10 @@ sudo apt install gnupg -y
 gpg --gen-key
 
 # Modify backup script to encrypt
-pg_dump bmi_tracker | gzip | gpg --encrypt --recipient your@email.com > backup_$(date +%Y%m%d).sql.gz.gpg
+pg_dump bmidb | gzip | gpg --encrypt --recipient your@email.com > backup_$(date +%Y%m%d).sql.gz.gpg
 
 # Decrypt for restore
-gpg --decrypt backup_20251216.sql.gz.gpg | gunzip | psql bmi_tracker
+gpg --decrypt backup_20251216.sql.gz.gpg | gunzip | psql bmidb
 ```
 
 ---
@@ -1726,7 +1726,7 @@ CREATE INDEX idx_created_at ON measurements(created_at);
 
 ```bash
 # Find largest tables
-sudo -u postgres psql -d bmi_tracker
+sudo -u postgres psql -d bmidb
 
 SELECT 
     schemaname,
@@ -1804,10 +1804,10 @@ sudo systemctl restart postgresql
 
 ```bash
 # Backup
-sudo -u postgres pg_dump -Fc bmi_tracker > backup.dump
+sudo -u postgres pg_dump -Fc bmidb > backup.dump
 
 # Restore
-sudo -u postgres pg_restore -d bmi_tracker backup.dump
+sudo -u postgres pg_restore -d bmidb backup.dump
 
 # Check health
 sudo systemctl status postgresql
@@ -1817,10 +1817,10 @@ sudo -u postgres psql -c "SELECT version();"
 sudo -u postgres psql -c "SELECT * FROM pg_stat_activity;"
 
 # Database size
-sudo -u postgres psql -c "SELECT pg_size_pretty(pg_database_size('bmi_tracker'));"
+sudo -u postgres psql -c "SELECT pg_size_pretty(pg_database_size('bmidb'));"
 
 # Test connection
-psql -h localhost -U bmi_user -d bmi_tracker -c "SELECT COUNT(*) FROM measurements;"
+psql -h localhost -U bmi_user -d bmidb -c "SELECT COUNT(*) FROM measurements;"
 ```
 
 ---

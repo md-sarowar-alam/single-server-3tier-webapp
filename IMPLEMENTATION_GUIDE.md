@@ -968,7 +968,7 @@ Before performing any update:
 
 ```bash
 # 1. Create database backup
-sudo -u postgres pg_dump -Fc bmi_tracker > /var/backups/postgresql/bmi_tracker_$(date +%Y%m%d_%H%M%S).dump
+sudo -u postgres pg_dump -Fc bmidb > /var/backups/postgresql/bmidb_$(date +%Y%m%d_%H%M%S).dump
 
 # 2. Check current application status
 pm2 status
@@ -1122,14 +1122,14 @@ ls -la migrations/
 # If new migration files exist (e.g., 003_add_new_feature.sql)
 # Run them manually:
 
-sudo -u postgres psql -d bmi_tracker -f migrations/003_add_new_feature.sql
+sudo -u postgres psql -d bmidb -f migrations/003_add_new_feature.sql
 
 # Or create a migration runner script
 cat > run_migrations.sh << 'EOF'
 #!/bin/bash
 for migration in migrations/*.sql; do
     echo "Running $migration..."
-    sudo -u postgres psql -d bmi_tracker -f "$migration"
+    sudo -u postgres psql -d bmidb -f "$migration"
     if [ $? -eq 0 ]; then
         echo "✓ $migration completed"
     else
@@ -1143,7 +1143,7 @@ chmod +x run_migrations.sh
 ./run_migrations.sh
 
 # Verify schema changes
-sudo -u postgres psql -d bmi_tracker
+sudo -u postgres psql -d bmidb
 
 -- Check tables
 \dt
@@ -1181,7 +1181,7 @@ mkdir -p $BACKUP_DIR
 
 # Step 1: Database backup
 echo "[1/8] Creating database backup..."
-sudo -u postgres pg_dump -Fc bmi_tracker > $BACKUP_DIR/bmi_tracker_$TIMESTAMP.dump
+sudo -u postgres pg_dump -Fc bmidb > $BACKUP_DIR/bmidb_$TIMESTAMP.dump
 echo "✓ Database backup created"
 
 # Step 2: Pull latest code
@@ -1202,7 +1202,7 @@ echo "[4/8] Running database migrations..."
 for migration in migrations/*.sql; do
     if [ -f "$migration" ]; then
         echo "  Running $(basename $migration)..."
-        sudo -u postgres psql -d bmi_tracker -f "$migration" 2>&1 | grep -v "already exists" || true
+        sudo -u postgres psql -d bmidb -f "$migration" 2>&1 | grep -v "already exists" || true
     fi
 done
 echo "✓ Migrations completed"
@@ -1300,9 +1300,9 @@ pm2 reload bmi-backend
 
 # 3. Rollback Database (if schema changed)
 # Restore from backup
-sudo -u postgres psql -c "DROP DATABASE bmi_tracker;"
-sudo -u postgres psql -c "CREATE DATABASE bmi_tracker OWNER bmi_user;"
-sudo -u postgres pg_restore -d bmi_tracker /var/backups/postgresql/bmi_tracker_TIMESTAMP.dump
+sudo -u postgres psql -c "DROP DATABASE bmidb;"
+sudo -u postgres psql -c "CREATE DATABASE bmidb OWNER bmi_user;"
+sudo -u postgres pg_restore -d bmidb /var/backups/postgresql/bmidb_TIMESTAMP.dump
 
 # 4. Rollback Frontend
 sudo cp -r /var/www/bmi-tracker.backup.TIMESTAMP/* /var/www/bmi-tracker/
@@ -1347,7 +1347,7 @@ fi
 # Check database connection
 echo ""
 echo "3. Database Connection:"
-if sudo -u postgres psql -d bmi_tracker -c "SELECT 1;" > /dev/null 2>&1; then
+if sudo -u postgres psql -d bmidb -c "SELECT 1;" > /dev/null 2>&1; then
     echo "   ✓ Database accessible"
 else
     echo "   ✗ Database connection failed"
